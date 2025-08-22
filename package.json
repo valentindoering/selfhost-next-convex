@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "dev:convex": "npx convex dev"
   },
   "dependencies": {
     "convex": "^1.26.0",
