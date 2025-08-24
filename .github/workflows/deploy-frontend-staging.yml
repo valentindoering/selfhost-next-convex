@@ -1,4 +1,4 @@
-name: Deploy to Staging
+name: Deploy Frontend to Staging
 
 on:
   push:

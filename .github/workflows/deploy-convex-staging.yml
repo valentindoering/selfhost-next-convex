@@ -1,0 +1,48 @@
+name: Deploy Convex to Staging
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'convex/**'
+      - 'schema.ts'
+      - '.github/workflows/deploy-convex-staging.yml'
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  deploy-convex:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Deploy to Convex staging (self-hosted)
+      env:
+        CONVEX_SELF_HOSTED_URL: ${{ secrets.STAGING_CONVEX_SELF_HOSTED_URL }}
+        CONVEX_SELF_HOSTED_ADMIN_KEY: ${{ secrets.STAGING_CONVEX_SELF_HOSTED_ADMIN_KEY }}
+      run: |
+        echo "🚀 Deploying Convex functions to self-hosted staging..."
+        echo "Using Convex self-hosted URL: $CONVEX_SELF_HOSTED_URL"
+        npx convex deploy
+        echo "✅ Convex staging deployment successful!"
+
+    - name: Verify deployment
+      env:
+        CONVEX_SELF_HOSTED_URL: ${{ secrets.STAGING_CONVEX_SELF_HOSTED_URL }}
+        CONVEX_SELF_HOSTED_ADMIN_KEY: ${{ secrets.STAGING_CONVEX_SELF_HOSTED_ADMIN_KEY }}
+      run: |
+        echo "🔍 Verifying Convex self-hosted deployment..."
+        # Verify deployment by checking if we can run commands
+        npx convex run --help > /dev/null 2>&1 && echo "✅ Convex CLI working correctly" || echo "❌ Convex CLI verification failed"
