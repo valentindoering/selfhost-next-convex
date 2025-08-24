@@ -29,9 +29,11 @@ COPY . .
 # Uncomment the following line in case you want to disable telemetry during the build.
 # ENV NEXT_TELEMETRY_DISABLED=1
 
-# Add build argument for Convex URL
+# Add build arguments
 ARG NEXT_PUBLIC_CONVEX_URL
+ARG NEXT_TELEMETRY_DISABLED=1
 ENV NEXT_PUBLIC_CONVEX_URL=$NEXT_PUBLIC_CONVEX_URL
+ENV NEXT_TELEMETRY_DISABLED=$NEXT_TELEMETRY_DISABLED
 
 RUN \
   if [ -f yarn.lock ]; then yarn run build; \
