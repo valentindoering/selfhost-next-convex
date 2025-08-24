@@ -9,6 +9,17 @@ export const get = query({
   },
 });
 
+// Query to get all todos sorted by creation time (newest first)
+export const getByCreationTime = query({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db
+      .query("todos")
+      .order("desc")
+      .collect();
+  },
+});
+
 // Mutation to create a new todo
 export const create = mutation({
   args: { text: v.string() },
@@ -16,6 +27,7 @@ export const create = mutation({
     const todoId = await ctx.db.insert("todos", {
       text: args.text,
       isCompleted: false,
+      createdTime: Date.now(),
     });
     return todoId;
   },
