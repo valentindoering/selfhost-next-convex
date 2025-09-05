@@ -31,6 +31,16 @@ export const send = mutation({
   },
 });
 
+export const clearAll = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const all = await ctx.db.query("risk_messages").collect();
+    for (const m of all) {
+      await ctx.db.delete(m._id);
+    }
+  },
+});
+
 function handleRiskCommand(text: string): string {
   const trimmed = text.trim();
 

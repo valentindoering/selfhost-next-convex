@@ -6,6 +6,7 @@ import { useEffect, useRef } from "react";
 export default function RiskGame() {
   const messages = useQuery(api.risk.list);
   const send = useMutation(api.risk.send);
+  const clearAll = useMutation(api.risk.clearAll);
   const endRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -24,7 +25,19 @@ export default function RiskGame() {
 
   return (
     <div className="min-h-[70vh] max-w-2xl mx-auto bg-white rounded-lg shadow-md p-4 flex flex-col">
-      <div className="text-xl font-semibold text-gray-800 mb-3">Risk Game</div>
+      <div className="mb-3 flex items-center justify-between">
+        <div className="text-xl font-semibold text-gray-800">Risk Game</div>
+        <button
+          title="Clear all"
+          onClick={() => clearAll({}).catch(() => {})}
+          className="text-gray-400 hover:text-gray-600"
+          aria-label="Clear all messages"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+            <path fillRule="evenodd" d="M9 3.75A.75.75 0 0 1 9.75 3h4.5a.75.75 0 0 1 .75.75V6h4.25a.75.75 0 0 1 0 1.5h-.82l-1.1 11.01A2.25 2.25 0 0 1 15.09 21H8.91a2.25 2.25 0 0 1-2.24-2.49L5.57 7.5h-.82a.75.75 0 0 1 0-1.5H9V3.75ZM7.1 7.5l1.06 10.6a.75.75 0 0 0 .75.68h6.18a.75.75 0 0 0 .75-.68L16.9 7.5H7.1ZM10.5 9.75a.75.75 0 0 1 .75.75v6a.75.75 0 0 1-1.5 0v-6a.75.75 0 0 1 .75-.75Zm4.5.75a.75.75 0 0 0-1.5 0v6a.75.75 0 0 0 1.5 0v-6Z" clipRule="evenodd" />
+          </svg>
+        </button>
+      </div>
       <div className="flex-1 overflow-y-auto space-y-2 pr-1">
         {messages === undefined ? (
           <div className="text-gray-500">Loading...</div>

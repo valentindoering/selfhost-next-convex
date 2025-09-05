@@ -28,6 +28,16 @@ export const send = mutation({
   },
 });
 
+export const clearAll = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const all = await ctx.db.query("messages").collect();
+    for (const m of all) {
+      await ctx.db.delete(m._id);
+    }
+  },
+});
+
 function generateReply(userContent: string): string {
   const trimmed = userContent.trim();
   if (!trimmed) return "I'm here! Ask me anything.";
