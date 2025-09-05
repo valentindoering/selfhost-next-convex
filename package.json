@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "dev:convex": "npx convex dev",
-    "deploy:convex": "npx convex deploy"
+    "deploy:convex": "npx convex deploy",
+    "dashboard": "npx convex dashboard"
   },
   "dependencies": {
     "convex": "^1.25.4",
