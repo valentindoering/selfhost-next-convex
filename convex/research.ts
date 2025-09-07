@@ -15,7 +15,7 @@ export const performResearch = action({
       time: Date.now(),
     });
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+      const baseUrl = process.env.CONVEX_SITE_ORIGIN || "http://localhost:3000";
       console.log("[ACTION performResearch] calling app API /api/research", { baseUrl, query: args.query, todoId: args.todoId });
       const response = await fetch(`${baseUrl}/api/research`, {
         method: "POST",
