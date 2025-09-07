@@ -30,9 +30,9 @@ export default function Realtime() {
 
   const agent = useMemo(() => {
     const addTodoParams = z.object({ 
-      text: z.string().min(1).max(200),
-      needsResearch: z.boolean().nullable(),
-      context: z.string().nullable()
+      text: z.string().min(1).max(200).describe("The todo item text - should be concise, actionable, and self-contained"),
+      needsResearch: z.boolean().nullable().describe("Always set this to true if the request could be mostly resolved with a web search. Use for todos that require looking up current information, facts, documentation, or external data"),
+      context: z.string().nullable().describe("Additional context explaining why research is needed or what specific information should be researched")
     });
     const addTodoTool = tool<typeof addTodoParams>({
       name: "add_todo",
@@ -139,10 +139,13 @@ export default function Realtime() {
           "You are a silent background agent running during a live meeting.",
           "Your job is to capture action items as todos and keep the list up to date.",
           "NEVER speak back, greet, narrate, or produce user-facing text.",
-          "Work only by calling tools.",
+          "Work only by calling tools. Your text output is not user-visible; only tool calls have effect.",
+          "Do not attempt to answer questions, perform web research, or generate content yourself. If information is needed, create a research todo instead.",
           "Behavior:",
           "- First call list_todos to get current IDs and states.",
-          "- When you hear a new action item, add_todo with a concise, actionable text.",
+          "- When you hear a new action item or question to resolve, add_todo with a concise, actionable text.",
+          "- For anything that may require external information, facts, documentation, or investigation, set needsResearch=true and include brief context explaining what to look up.",
+          "- Prefer marking needsResearch=true even if the item is only partially researchable; a separate function will perform the web search and update results.",
           "- If a mentioned action matches an existing todo, update_todo to refine wording.",
           "- If an action is confirmed as done, check_todo(done=true). If reopened, check_todo(done=false).",
           "- If a task is explicitly canceled, delete_todo.",
@@ -150,6 +153,7 @@ export default function Realtime() {
           "- Avoid duplicates: compare semantically with existing todos first.",
           "- Keep todos short, imperative, and self-contained (who/what/when if spoken).",
           "- Do not ask for confirmation; act autonomously.",
+          "- Do not answer questions. Your answer is not user-visible; only tool calls have effect.",
         ].join("\n"),
       tools: [addTodoTool, listTodosTool, deleteTodoTool, updateTodoTool, checkTodoTool, toggleTodoTool],
     });
