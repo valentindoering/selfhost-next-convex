@@ -70,9 +70,19 @@ export function TodoList() {
   const updateResearchData = useMutation(api.todos.updateResearchData);
 
   const [expandedIds, setExpandedIds] = useState<Set<Id<"todos">>>(new Set());
+  const [resultsExpandedIds, setResultsExpandedIds] = useState<Set<Id<"todos">>>(new Set());
 
   const toggleExpanded = (id: Id<"todos">) => {
     setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleResultsExpanded = (id: Id<"todos">) => {
+    setResultsExpandedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -173,6 +183,7 @@ export function TodoList() {
                                (todo.researchData && Object.keys(todo.researchData).length > 0);
             const needsResearch = todo.needsResearch && !hasResearch;
             const isExpanded = expandedIds.has(todo._id);
+            const isResultsExpanded = resultsExpandedIds.has(todo._id);
             let parsedResearchResults: unknown = undefined;
             if (typeof todo.researchResults === "string") {
               try {
@@ -182,6 +193,9 @@ export function TodoList() {
               }
             }
             const hasResults = Boolean(todo.researchResults) || typeof parsedResearchResults !== "undefined";
+            const researchObj: any = (todo.researchData && typeof todo.researchData === "object")
+              ? todo.researchData
+              : (typeof parsedResearchResults === "object" ? parsedResearchResults : null);
             
             return (
               <div
@@ -214,9 +228,14 @@ export function TodoList() {
                   </span>
 
                   {hasResearch && (
-                    <span className="text-blue-600 text-sm" title="Research completed">
+                    <button
+                      onClick={() => toggleResultsExpanded(todo._id)}
+                      aria-expanded={isResultsExpanded}
+                      className={`text-sm px-1 ${isResultsExpanded ? "text-blue-800" : "text-blue-600 hover:text-blue-800"}`}
+                      title={isResultsExpanded ? "Hide research results" : "Show research results"}
+                    >
                       🔍
-                    </span>
+                    </button>
                   )}
                   {needsResearch && (
                     <span className="text-yellow-600 text-sm" title="Research pending">
@@ -240,6 +259,40 @@ export function TodoList() {
                     ✕
                   </button>
                 </div>
+
+                {isResultsExpanded && hasResults && (
+                  <div className="mt-2 w-full rounded border border-blue-200 bg-blue-50 p-3 text-sm text-gray-700">
+                    {researchObj && typeof researchObj === "object" && Array.isArray((researchObj as any).results) ? (
+                      <div className="space-y-2">
+                        {researchObj.summary && (
+                          <div className="mb-1 text-gray-800">{researchObj.summary}</div>
+                        )}
+                        {(researchObj.results as any[]).map((r, idx) => (
+                          <div key={idx} className="rounded border border-blue-100 bg-white p-2">
+                            <div className="font-medium text-gray-900 text-sm">{r.title ?? "Untitled"}</div>
+                            {r.url && (
+                              <a
+                                href={r.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-blue-600 hover:underline break-all"
+                              >
+                                {r.url}
+                              </a>
+                            )}
+                            {r.content && (
+                              <p className="mt-1 text-xs text-gray-700 whitespace-pre-wrap">{r.content}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <pre className="mt-1 max-h-64 overflow-auto rounded bg-gray-100 p-2 text-xs">
+{JSON.stringify(parsedResearchResults ?? todo.researchResults ?? todo.researchData, null, 2)}
+                      </pre>
+                    )}
+                  </div>
+                )}
 
                 {isExpanded && (
                   <div className="mt-2 w-full rounded border border-gray-200 bg-white p-3 text-sm text-gray-700">
