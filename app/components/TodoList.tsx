@@ -62,6 +62,33 @@ const performResearch = async (todoId: string, query: string) => {
   }
 };
 
+// Research result types and guards to avoid `any`
+type ResearchResultItem = {
+  title?: string;
+  url?: string;
+  content?: string;
+};
+
+type ResearchDataShape = {
+  summary?: string;
+  results?: ResearchResultItem[];
+};
+
+function isResearchDataShape(value: unknown): value is ResearchDataShape {
+  if (!value || typeof value !== "object") return false;
+  const obj = value as Record<string, unknown>;
+  if (obj.results === undefined) return true;
+  if (!Array.isArray(obj.results)) return false;
+  return obj.results.every((item) => {
+    if (!item || typeof item !== "object") return false;
+    const it = item as Record<string, unknown>;
+    const titleOk = it.title === undefined || typeof it.title === "string";
+    const urlOk = it.url === undefined || typeof it.url === "string";
+    const contentOk = it.content === undefined || typeof it.content === "string";
+    return titleOk && urlOk && contentOk;
+  });
+}
+
 export function TodoList() {
   const todos = useQuery(api.todos.get);
   const createTodo = useMutation(api.todos.create);
@@ -193,9 +220,10 @@ export function TodoList() {
               }
             }
             const hasResults = Boolean(todo.researchResults) || typeof parsedResearchResults !== "undefined";
-            const researchObj: any = (todo.researchData && typeof todo.researchData === "object")
-              ? todo.researchData
-              : (typeof parsedResearchResults === "object" ? parsedResearchResults : null);
+            const researchData: ResearchDataShape | null =
+              isResearchDataShape(todo.researchData) ? (todo.researchData as ResearchDataShape)
+              : isResearchDataShape(parsedResearchResults) ? (parsedResearchResults as ResearchDataShape)
+              : null;
             
             return (
               <div
@@ -262,12 +290,12 @@ export function TodoList() {
 
                 {isResultsExpanded && hasResults && (
                   <div className="mt-2 w-full rounded border border-blue-200 bg-blue-50 p-3 text-sm text-gray-700">
-                    {researchObj && typeof researchObj === "object" && Array.isArray((researchObj as any).results) ? (
+                    {researchData && Array.isArray(researchData.results) ? (
                       <div className="space-y-2">
-                        {researchObj.summary && (
-                          <div className="mb-1 text-gray-800">{researchObj.summary}</div>
+                        {researchData.summary && (
+                          <div className="mb-1 text-gray-800">{researchData.summary}</div>
                         )}
-                        {(researchObj.results as any[]).map((r, idx) => (
+                        {(researchData.results ?? []).map((r, idx) => (
                           <div key={idx} className="rounded border border-blue-100 bg-white p-2">
                             <div className="font-medium text-gray-900 text-sm">{r.title ?? "Untitled"}</div>
                             {r.url && (

@@ -14,7 +14,6 @@ export default function Realtime() {
   const toggleTodo = useMutation(api.todos.toggle);
   const updateTodo = useMutation(api.todos.update);
   const setCompleted = useMutation(api.todos.setCompleted);
-  const updateResearchData = useMutation(api.todos.updateResearchData);
   const convex = useConvex();
   const clearAll = useMutation(api.realtime.clearAll);
   const formRef = useRef<HTMLFormElement | null>(null);
@@ -43,7 +42,7 @@ export default function Realtime() {
         // Mirror user's spoken/intent into chat for context
         await send({ content: `add_todo(text=${JSON.stringify(text)})`, role: "tool", autoReply: false, createdTime: Date.now() });
         // Create todo directly via Convex mutation with research parameters
-        const todoId = await createTodo({ text, needsResearch: needsResearch || undefined, context: context || undefined });
+        await createTodo({ text, needsResearch: needsResearch || undefined, context: context || undefined });
 
         // Research is now scheduled by a Convex trigger when needsResearch is true
         const researchNote = needsResearch ? " (research will run automatically)" : "";
@@ -157,7 +156,7 @@ export default function Realtime() {
         ].join("\n"),
       tools: [addTodoTool, listTodosTool, deleteTodoTool, updateTodoTool, checkTodoTool, toggleTodoTool],
     });
-  }, [send, convex, createTodo, removeTodo, toggleTodo, updateTodo, setCompleted, updateResearchData]);
+  }, [send, convex, createTodo, removeTodo, toggleTodo, updateTodo, setCompleted]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
