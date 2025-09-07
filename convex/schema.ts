@@ -17,4 +17,9 @@ export default defineSchema({
     content: v.string(),
     createdTime: v.number(),
   }).index("by_createdTime", ["createdTime"]),
+  realtime_messages: defineTable({
+    role: v.union(v.literal("user"), v.literal("system")),
+    content: v.string(),
+    createdTime: v.number(),
+  }).index("by_createdTime", ["createdTime"]),
 });

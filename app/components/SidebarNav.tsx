@@ -75,6 +75,14 @@ export default function SidebarNav() {
             Chat
           </Link>
           <Link
+            href="/realtime"
+            className={`block rounded-md px-3 py-2 text-sm font-medium ${
+              pathname === "/realtime" ? "bg-gray-100 text-gray-900" : "text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            Realtime
+          </Link>
+          <Link
             href="/risk"
             className={`block rounded-md px-3 py-2 text-sm font-medium ${
               pathname === "/risk" ? "bg-gray-100 text-gray-900" : "text-gray-700 hover:bg-gray-50"

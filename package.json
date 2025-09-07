@@ -12,10 +12,12 @@
     "dashboard": "npx convex dashboard"
   },
   "dependencies": {
+    "@openai/agents-realtime": "^0.1.0",
     "convex": "^1.25.4",
     "next": "15.5.0",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

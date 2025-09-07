@@ -54,3 +54,23 @@ export const remove = mutation({
     await ctx.db.delete(args.id);
   },
 });
+
+// Mutation to update todo text
+export const update = mutation({
+  args: { id: v.id("todos"), text: v.string() },
+  handler: async (ctx, args) => {
+    const todo = await ctx.db.get(args.id);
+    if (!todo) throw new Error("Todo not found");
+    await ctx.db.patch(args.id, { text: args.text });
+  },
+});
+
+// Mutation to explicitly set completion state
+export const setCompleted = mutation({
+  args: { id: v.id("todos"), isCompleted: v.boolean() },
+  handler: async (ctx, args) => {
+    const todo = await ctx.db.get(args.id);
+    if (!todo) throw new Error("Todo not found");
+    await ctx.db.patch(args.id, { isCompleted: args.isCompleted });
+  },
+});
