@@ -1,6 +1,7 @@
 "use client";
 import { useConvex, useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
+import type { Doc, Id } from "../../convex/_generated/dataModel";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { RealtimeAgent, RealtimeSession, tool } from "@openai/agents-realtime";
 import { z } from "zod";
@@ -52,11 +53,11 @@ export default function Realtime() {
       needsApproval: false,
       execute: async () => {
         await send({ content: `list_todos()`, role: "tool", autoReply: false, createdTime: Date.now() });
-        const todos = await convex.query(api.todos.get, {} as any);
+        const todos = await convex.query(api.todos.get, {});
         if (!todos || todos.length === 0) return "No todos yet.";
         // Provide IDs so the agent can act on follow-up requests
         const lines = todos
-          .map((t: any) => `- ${t._id}: ${t.text} ${t.isCompleted ? "[done]" : "[todo]"}`)
+          .map((t: Doc<"todos">) => `- ${t._id}: ${t.text} ${t.isCompleted ? "[done]" : "[todo]"}`)
           .join("\n");
         const result = `Current todos with IDs:\n${lines}`;
         await send({ content: result, role: "tool", autoReply: false, createdTime: Date.now() });
@@ -72,8 +73,7 @@ export default function Realtime() {
       needsApproval: false,
       execute: async ({ id }) => {
         await send({ content: `delete_todo(id=${id})`, role: "tool", autoReply: false, createdTime: Date.now() });
-        // Id comes as string; Convex generated types allow string for runtime
-        await removeTodo({ id: id as any });
+        await removeTodo({ id: id as Id<"todos"> });
         const result = `Deleted todo ${id}`;
         await send({ content: result, role: "tool", autoReply: false, createdTime: Date.now() });
         return result;
@@ -88,7 +88,7 @@ export default function Realtime() {
       needsApproval: false,
       execute: async ({ id, text }) => {
         await send({ content: `update_todo(id=${id}, text=${JSON.stringify(text)})`, role: "tool", autoReply: false, createdTime: Date.now() });
-        await updateTodo({ id: id as any, text });
+        await updateTodo({ id: id as Id<"todos">, text });
         const result = `Updated todo ${id}`;
         await send({ content: result, role: "tool", autoReply: false, createdTime: Date.now() });
         return result;
@@ -103,7 +103,7 @@ export default function Realtime() {
       needsApproval: false,
       execute: async ({ id, done }) => {
         await send({ content: `check_todo(id=${id}, done=${done})`, role: "tool", autoReply: false, createdTime: Date.now() });
-        await setCompleted({ id: id as any, isCompleted: done });
+        await setCompleted({ id: id as Id<"todos">, isCompleted: done });
         const result = `Updated completion for ${id}`;
         await send({ content: result, role: "tool", autoReply: false, createdTime: Date.now() });
         return result;
@@ -118,7 +118,7 @@ export default function Realtime() {
       needsApproval: false,
       execute: async ({ id }) => {
         await send({ content: `toggle_todo(id=${id})`, role: "tool", autoReply: false, createdTime: Date.now() });
-        await toggleTodo({ id: id as any });
+        await toggleTodo({ id: id as Id<"todos"> });
         const result = `Toggled completion for ${id}`;
         await send({ content: result, role: "tool", autoReply: false, createdTime: Date.now() });
         return result;
@@ -189,36 +189,45 @@ export default function Realtime() {
       });
       // Persist assistant completions into Convex
       const persistAssistantIfNeeded = async () => {
-        for (const item of s.history) {
-          // Only assistant messages with text/transcript and not yet persisted
-          if ((item as any).type === "message" && (item as any).role === "assistant" && (item as any).status === "completed") {
-            const id = (item as any).itemId as string;
-            if (!persistedIdsRef.current.has(id)) {
-              const content = (item as any).content?.find((c: any) => c.type === "output_text")?.text
-                || (item as any).content?.find((c: any) => c.type === "output_audio")?.transcript
-                || "";
-              if (content) {
-                persistedIdsRef.current.add(id);
-                await send({ content, role: "system", autoReply: false, createdTime: Date.now() });
-              }
-            }
+        const history = Array.isArray(s.history) ? (s.history as unknown[]) : [];
+        for (const item of history) {
+          if (!item || typeof item !== "object") continue;
+          const obj = item as Record<string, unknown>;
+          const isAssistantMessage = obj.type === "message" && obj.role === "assistant" && obj.status === "completed";
+          const id = typeof obj.itemId === "string" ? obj.itemId : undefined;
+          if (!isAssistantMessage || !id) continue;
+          if (persistedIdsRef.current.has(id)) continue;
+          let content = "";
+          const contentArray = Array.isArray(obj.content) ? (obj.content as unknown[]) : [];
+          for (const c of contentArray) {
+            if (!c || typeof c !== "object") continue;
+            const co = c as Record<string, unknown>;
+            if (co.type === "output_text" && typeof co.text === "string") { content = co.text; break; }
+            if (co.type === "output_audio" && typeof co.transcript === "string") { content = co.transcript; break; }
+          }
+          if (content) {
+            persistedIdsRef.current.add(id);
+            await send({ content, role: "system", autoReply: false, createdTime: Date.now() });
           }
         }
       };
       s.on("history_updated", persistAssistantIfNeeded);
       s.on("history_added", persistAssistantIfNeeded);
-      s.on("transport_event", (event: any) => {
-        if (event?.type === "conversation.item.input_audio_transcription.completed") {
-          const id = event.item_id as string;
-          const transcript = event.transcript as string;
-          if (transcript && !persistedIdsRef.current.has(id)) {
-            persistedIdsRef.current.add(id);
-            // Persist user transcript
-            send({ content: transcript, role: "user", autoReply: false, createdTime: Date.now() });
+      s.on("transport_event", (event: unknown) => {
+        if (event && typeof event === "object") {
+          const ev = event as Record<string, unknown>;
+          if (ev.type === "conversation.item.input_audio_transcription.completed") {
+            const id = typeof ev.item_id === "string" ? ev.item_id : undefined;
+            const transcript = typeof ev.transcript === "string" ? ev.transcript : undefined;
+            if (id && transcript && !persistedIdsRef.current.has(id)) {
+              persistedIdsRef.current.add(id);
+              send({ content: transcript, role: "user", autoReply: false, createdTime: Date.now() });
+            }
           }
-        }
-        if (event?.type === "connection_change") {
-          setConnected(event.status === "connected");
+          if (ev.type === "connection_change") {
+            const status = typeof ev.status === "string" ? ev.status : undefined;
+            if (status) setConnected(status === "connected");
+          }
         }
       });
 
