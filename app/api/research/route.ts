@@ -68,12 +68,17 @@ export async function POST(request: Request) {
     console.log("Tavily response received, processing results...");
 
     // Transform Tavily results to our format
-    const results = (tavilyData.results || []).map((result: any) => ({
-      title: result.title || "No title",
-      url: result.url || "",
-      content: result.content || "",
-      score: result.score || 0,
-    }));
+    type ResearchResult = { title: string; url: string; content: string; score: number };
+    const rawResults: unknown[] = Array.isArray(tavilyData.results) ? tavilyData.results : [];
+    const results: ResearchResult[] = rawResults.map((r: unknown) => {
+      const obj = (r ?? {}) as Record<string, unknown>;
+      return {
+        title: typeof obj.title === "string" ? obj.title : "No title",
+        url: typeof obj.url === "string" ? obj.url : "",
+        content: typeof obj.content === "string" ? obj.content : "",
+        score: typeof obj.score === "number" ? obj.score : 0,
+      };
+    });
 
     const researchResults = {
       query,
@@ -84,7 +89,7 @@ export async function POST(request: Request) {
       metadata: {
         searchTerms: query.split(' '),
         resultCount: results.length,
-        averageRelevance: results.reduce((sum: number, r: any) => sum + r.score, 0) / results.length || 0,
+        averageRelevance: results.length ? results.reduce((sum, r) => sum + r.score, 0) / results.length : 0,
         tavilyUsed: true
       }
     };

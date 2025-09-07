@@ -198,7 +198,7 @@ export default function Realtime() {
         ].join("\n"),
       tools: [addTodoTool, listTodosTool, deleteTodoTool, updateTodoTool, checkTodoTool, toggleTodoTool],
     });
-  }, [send, convex, createTodo, removeTodo, toggleTodo, updateTodo, setCompleted]);
+  }, [send, convex, createTodo, removeTodo, toggleTodo, updateTodo, setCompleted, updateResearchData]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
