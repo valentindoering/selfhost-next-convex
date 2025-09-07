@@ -11,7 +11,7 @@ export const list = query({
 export const send = mutation({
   args: {
     content: v.string(),
-    role: v.optional(v.union(v.literal("user"), v.literal("system"))),
+    role: v.optional(v.union(v.literal("user"), v.literal("system"), v.literal("tool"))),
     createdTime: v.optional(v.number()),
     autoReply: v.optional(v.boolean()),
   },

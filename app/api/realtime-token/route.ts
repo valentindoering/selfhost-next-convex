@@ -23,9 +23,12 @@ export async function GET() {
     });
 
     if (!resp.ok) {
-      let detail: any = null;
+      let detail: unknown = null;
       try { detail = await resp.json(); } catch { detail = await resp.text(); }
-      return NextResponse.json({ error: detail || "Failed to create client secret" }, { status: resp.status });
+      const errorMessage = typeof detail === "string" && detail.trim().length > 0
+        ? detail
+        : "Failed to create client secret";
+      return NextResponse.json({ error: errorMessage }, { status: resp.status });
     }
 
     const data = await resp.json();
@@ -40,8 +43,9 @@ export async function GET() {
     }
 
     return NextResponse.json({ token: value });
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message || "Unknown error" }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
