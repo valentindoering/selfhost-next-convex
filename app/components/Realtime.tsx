@@ -30,9 +30,9 @@ export default function Realtime() {
 
   const agent = useMemo(() => {
     const addTodoParams = z.object({ 
-      text: z.string().min(1).max(200),
-      needsResearch: z.boolean().nullable(),
-      context: z.string().nullable()
+      text: z.string().min(1).max(200).describe("The todo item text - should be concise, actionable, and self-contained"),
+      needsResearch: z.boolean().nullable().describe("Always set this to true if the request could be mostly resolved with a web search. Use for todos that require looking up current information, facts, documentation, or external data"),
+      context: z.string().nullable().describe("Additional context explaining why research is needed or what specific information should be researched")
     });
     const addTodoTool = tool<typeof addTodoParams>({
       name: "add_todo",
@@ -118,7 +118,9 @@ export default function Realtime() {
       },
     });
 
-    const deleteParams = z.object({ id: z.string() });
+    const deleteParams = z.object({ 
+      id: z.string().describe("The unique ID of the todo item to delete")
+    });
     const deleteTodoTool = tool<typeof deleteParams>({
       name: "delete_todo",
       description: "Delete a todo by id",
@@ -133,7 +135,10 @@ export default function Realtime() {
       },
     });
 
-    const updateParams = z.object({ id: z.string(), text: z.string().min(1).max(200) });
+    const updateParams = z.object({ 
+      id: z.string().describe("The unique ID of the todo item to update"),
+      text: z.string().min(1).max(200).describe("The new text for the todo item")
+    });
     const updateTodoTool = tool<typeof updateParams>({
       name: "update_todo",
       description: "Update the text of a todo",
@@ -148,7 +153,10 @@ export default function Realtime() {
       },
     });
 
-    const checkParams = z.object({ id: z.string(), done: z.boolean() });
+    const checkParams = z.object({ 
+      id: z.string().describe("The unique ID of the todo item to mark as completed/uncompleted"),
+      done: z.boolean().describe("True to mark as completed, false to mark as uncompleted")
+    });
     const checkTodoTool = tool<typeof checkParams>({
       name: "check_todo",
       description: "Mark a todo as completed (or uncompleted if done=false)",
@@ -163,7 +171,9 @@ export default function Realtime() {
       },
     });
 
-    const toggleParams = z.object({ id: z.string() });
+    const toggleParams = z.object({ 
+      id: z.string().describe("The unique ID of the todo item to toggle between completed/uncompleted")
+    });
     const toggleTodoTool = tool<typeof toggleParams>({
       name: "toggle_todo",
       description: "Toggle a todo's completion state by id",
