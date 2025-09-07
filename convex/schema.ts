@@ -6,6 +6,11 @@ export default defineSchema({
     text: v.string(),
     isCompleted: v.boolean(),
     createdTime: v.optional(v.number()),
+    needsResearch: v.optional(v.boolean()),
+    context: v.optional(v.string()),
+    researchResults: v.optional(v.string()),
+    researchContext: v.optional(v.string()),
+    researchData: v.optional(v.any()),
   }),
   messages: defineTable({
     role: v.union(v.literal("user"), v.literal("system")),

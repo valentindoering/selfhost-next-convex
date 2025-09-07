@@ -14,6 +14,7 @@ export default function Realtime() {
   const toggleTodo = useMutation(api.todos.toggle);
   const updateTodo = useMutation(api.todos.update);
   const setCompleted = useMutation(api.todos.setCompleted);
+  const updateResearchData = useMutation(api.todos.updateResearchData);
   const convex = useConvex();
   const clearAll = useMutation(api.realtime.clearAll);
   const formRef = useRef<HTMLFormElement | null>(null);
@@ -28,18 +29,70 @@ export default function Realtime() {
   const persistedIdsRef = useRef<Set<string>>(new Set());
 
   const agent = useMemo(() => {
-    const addTodoParams = z.object({ text: z.string().min(1).max(200) });
+    const addTodoParams = z.object({ 
+      text: z.string().min(1).max(200),
+      needsResearch: z.boolean().nullable(),
+      context: z.string().nullable()
+    });
     const addTodoTool = tool<typeof addTodoParams>({
       name: "add_todo",
-      description: "Add a todo item to the list",
+      description: "Add a todo item to the list. Set needsResearch to true if the todo requires research or investigation, and provide context explaining why research is needed.",
       parameters: addTodoParams,
       needsApproval: false,
-      execute: async ({ text }) => {
-        // Log tool call for debugging visibility
+      execute: async ({ text, needsResearch, context }) => {
+        // Mirror user's spoken/intent into chat for context
+        await send({ content: text, role: "user", autoReply: false, createdTime: Date.now() });
         await send({ content: `add_todo(text=${JSON.stringify(text)})`, role: "tool", autoReply: false, createdTime: Date.now() });
-        // Create todo directly via Convex mutation
-        await createTodo({ text });
-        const result = `Added todo: ${text}`;
+        // Create todo directly via Convex mutation with research parameters
+        const todoId = await createTodo({ text, needsResearch: needsResearch || undefined, context: context || undefined });
+        
+        // If research is needed, trigger it automatically
+        if (needsResearch) {
+          try {
+            console.log(`Triggering research for todo: ${todoId}`);
+            const response = await fetch('/api/research', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ query: text, todoId }),
+            });
+
+            if (response.ok) {
+              const researchResults = await response.json();
+              console.log('Research results received:', researchResults);
+              await updateResearchData({
+                id: todoId,
+                researchData: researchResults
+              });
+              await send({ 
+                content: `Research completed for "${text}". Found ${researchResults.results.length} results.`,
+                role: "system", 
+                autoReply: false, 
+                createdTime: Date.now() 
+              });
+            } else {
+              console.error('Research failed:', response.statusText);
+              await send({ 
+                content: `Research failed for "${text}": ${response.statusText}`,
+                role: "system", 
+                autoReply: false, 
+                createdTime: Date.now() 
+              });
+            }
+          } catch (error) {
+            console.error('Research error:', error);
+            await send({ 
+              content: `Research error for "${text}": ${error instanceof Error ? error.message : 'Unknown error'}`,
+              role: "system", 
+              autoReply: false, 
+              createdTime: Date.now() 
+            });
+          }
+        }
+        
+        const researchNote = needsResearch ? " (research started)" : "";
+        const result = `Added todo: ${text}${researchNote}`;
         await send({ content: result, role: "tool", autoReply: false, createdTime: Date.now() });
         return result;
       },
