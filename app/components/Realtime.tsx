@@ -41,57 +41,12 @@ export default function Realtime() {
       needsApproval: false,
       execute: async ({ text, needsResearch, context }) => {
         // Mirror user's spoken/intent into chat for context
-        await send({ content: text, role: "user", autoReply: false, createdTime: Date.now() });
         await send({ content: `add_todo(text=${JSON.stringify(text)})`, role: "tool", autoReply: false, createdTime: Date.now() });
         // Create todo directly via Convex mutation with research parameters
         const todoId = await createTodo({ text, needsResearch: needsResearch || undefined, context: context || undefined });
-        
-        // If research is needed, trigger it automatically
-        if (needsResearch) {
-          try {
-            console.log(`Triggering research for todo: ${todoId}`);
-            const response = await fetch('/api/research', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ query: text, todoId }),
-            });
 
-            if (response.ok) {
-              const researchResults = await response.json();
-              console.log('Research results received:', researchResults);
-              await updateResearchData({
-                id: todoId,
-                researchData: researchResults
-              });
-              await send({ 
-                content: `Research completed for "${text}". Found ${researchResults.results.length} results.`,
-                role: "system", 
-                autoReply: false, 
-                createdTime: Date.now() 
-              });
-            } else {
-              console.error('Research failed:', response.statusText);
-              await send({ 
-                content: `Research failed for "${text}": ${response.statusText}`,
-                role: "system", 
-                autoReply: false, 
-                createdTime: Date.now() 
-              });
-            }
-          } catch (error) {
-            console.error('Research error:', error);
-            await send({ 
-              content: `Research error for "${text}": ${error instanceof Error ? error.message : 'Unknown error'}`,
-              role: "system", 
-              autoReply: false, 
-              createdTime: Date.now() 
-            });
-          }
-        }
-        
-        const researchNote = needsResearch ? " (research started)" : "";
+        // Research is now scheduled by a Convex trigger when needsResearch is true
+        const researchNote = needsResearch ? " (research will run automatically)" : "";
         const result = `Added todo: ${text}${researchNote}`;
         await send({ content: result, role: "tool", autoReply: false, createdTime: Date.now() });
         return result;

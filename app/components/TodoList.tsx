@@ -2,6 +2,7 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
+import { useState } from "react";
 
 // Function to detect if a todo needs research
 const detectResearchNeeds = (todoText: string): { needsResearch: boolean; context?: string } => {
@@ -68,6 +69,26 @@ export function TodoList() {
   const removeTodo = useMutation(api.todos.remove);
   const updateResearchData = useMutation(api.todos.updateResearchData);
 
+  const [expandedIds, setExpandedIds] = useState<Set<Id<"todos">>>(new Set());
+
+  const toggleExpanded = (id: Id<"todos">) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const formatDate = (ts?: number) => {
+    if (!ts) return "N/A";
+    try {
+      return new Date(ts).toLocaleString();
+    } catch {
+      return String(ts);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = e.currentTarget;
@@ -94,17 +115,15 @@ export function TodoList() {
       
       // If research is needed, perform it automatically
       if (researchNeeds.needsResearch) {
-        console.log("Performing research for todo:", todoId);
-        const researchResults = await performResearch(todoId, text.trim());
+        const researchResults = await performResearch(todoId as unknown as string, text.trim());
         if (researchResults) {
-          console.log("Research results:", researchResults);
           await updateResearchData({
-            id: todoId,
-            researchData: researchResults
+            id: todoId as Id<"todos">,
+            researchData: researchResults,
           });
         }
       }
-      
+
       form.reset();
     }
   };
@@ -153,54 +172,131 @@ export function TodoList() {
             const hasResearch = (todo.researchResults && todo.researchResults.length > 0) ||
                                (todo.researchData && Object.keys(todo.researchData).length > 0);
             const needsResearch = todo.needsResearch && !hasResearch;
+            const isExpanded = expandedIds.has(todo._id);
+            let parsedResearchResults: unknown = undefined;
+            if (typeof todo.researchResults === "string") {
+              try {
+                parsedResearchResults = JSON.parse(todo.researchResults);
+              } catch {
+                parsedResearchResults = todo.researchResults;
+              }
+            }
+            const hasResults = Boolean(todo.researchResults) || typeof parsedResearchResults !== "undefined";
             
             return (
               <div
                 key={todo._id}
-                className={`flex items-center gap-3 p-3 border rounded-md ${
+                className={`p-3 border rounded-md ${
                   hasResearch ? "border-blue-300 bg-blue-50" : 
                   needsResearch ? "border-yellow-300 bg-yellow-50" : 
                   "border-gray-200"
                 }`}
               >
-                <button
-                  onClick={() => handleToggle(todo._id)}
-                  className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                    todo.isCompleted
-                      ? "bg-green-500 border-green-500 text-white"
-                      : "border-gray-300 hover:border-green-500"
-                  }`}
-                >
-                  {todo.isCompleted && "✓"}
-                </button>
-                <span
-                  className={`flex-1 ${
-                    todo.isCompleted
-                      ? "line-through text-gray-500"
-                      : "text-gray-800"
-                  }`}
-                >
-                  {todo.text}
-                </span>
-                
-                {/* Research indicator */}
-                {hasResearch && (
-                  <span className="text-blue-600 text-sm" title="Research completed">
-                    🔍
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => handleToggle(todo._id)}
+                    className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                      todo.isCompleted
+                        ? "bg-green-500 border-green-500 text-white"
+                        : "border-gray-300 hover:border-green-500"
+                    }`}
+                  >
+                    {todo.isCompleted && "✓"}
+                  </button>
+                  <span
+                    className={`flex-1 ${
+                      todo.isCompleted
+                        ? "line-through text-gray-500"
+                        : "text-gray-800"
+                    }`}
+                  >
+                    {todo.text}
                   </span>
+
+                  {hasResearch && (
+                    <span className="text-blue-600 text-sm" title="Research completed">
+                      🔍
+                    </span>
+                  )}
+                  {needsResearch && (
+                    <span className="text-yellow-600 text-sm" title="Research pending">
+                      ⏳
+                    </span>
+                  )}
+
+                  <button
+                    onClick={() => toggleExpanded(todo._id)}
+                    aria-expanded={isExpanded}
+                    className="text-gray-500 hover:text-gray-700 px-2"
+                    title={isExpanded ? "Collapse" : "Expand"}
+                  >
+                    {isExpanded ? "▴" : "▾"}
+                  </button>
+
+                  <button
+                    onClick={() => handleRemove(todo._id)}
+                    className="text-red-500 hover:text-red-700 px-2"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {isExpanded && (
+                  <div className="mt-2 w-full rounded border border-gray-200 bg-white p-3 text-sm text-gray-700">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <div>
+                        <div className="text-gray-500">ID</div>
+                        <div className="break-all">{String(todo._id)}</div>
+                      </div>
+                      <div>
+                        <div className="text-gray-500">Created</div>
+                        <div>{formatDate(todo.createdTime)}</div>
+                      </div>
+                      <div>
+                        <div className="text-gray-500">Completed</div>
+                        <div>{todo.isCompleted ? "Yes" : "No"}</div>
+                      </div>
+                      <div>
+                        <div className="text-gray-500">Needs Research</div>
+                        <div>{todo.needsResearch ? "Yes" : "No"}</div>
+                      </div>
+                      {typeof todo.researchScheduled !== "undefined" && (
+                        <div>
+                          <div className="text-gray-500">Research Scheduled</div>
+                          <div>{todo.researchScheduled ? "Yes" : "No"}</div>
+                        </div>
+                      )}
+                      {todo.context && (
+                        <div className="sm:col-span-2">
+                          <div className="text-gray-500">Context</div>
+                          <div className="whitespace-pre-wrap">{todo.context}</div>
+                        </div>
+                      )}
+                      {todo.researchContext && (
+                        <div className="sm:col-span-2">
+                          <div className="text-gray-500">Research Context</div>
+                          <div className="whitespace-pre-wrap">{todo.researchContext}</div>
+                        </div>
+                      )}
+                      {hasResults && (
+                        <div className="sm:col-span-2">
+                          <div className="text-gray-500">Research Results</div>
+                          <pre className="mt-1 max-h-64 overflow-auto rounded bg-gray-50 p-2 text-xs">
+{JSON.stringify(parsedResearchResults ?? todo.researchResults, null, 2)}
+                          </pre>
+                        </div>
+                      )}
+                      {typeof todo.researchData !== "undefined" && (
+                        <div className="sm:col-span-2">
+                          <div className="text-gray-500">Research Data</div>
+                          <pre className="mt-1 max-h-64 overflow-auto rounded bg-gray-50 p-2 text-xs">
+{JSON.stringify(todo.researchData, null, 2)}
+                          </pre>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 )}
-                {needsResearch && (
-                  <span className="text-yellow-600 text-sm" title="Research pending">
-                    ⏳
-                  </span>
-                )}
-                
-                <button
-                  onClick={() => handleRemove(todo._id)}
-                  className="text-red-500 hover:text-red-700 px-2"
-                >
-                  ✕
-                </button>
               </div>
             );
           })

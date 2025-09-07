@@ -14,6 +14,7 @@ import type {
   FunctionReference,
 } from "convex/server";
 import type * as chat from "../chat.js";
+import type * as functions from "../functions.js";
 import type * as realtime from "../realtime.js";
 import type * as research from "../research.js";
 import type * as risk from "../risk.js";
@@ -29,6 +30,7 @@ import type * as todos from "../todos.js";
  */
 declare const fullApi: ApiFromModules<{
   chat: typeof chat;
+  functions: typeof functions;
   realtime: typeof realtime;
   research: typeof research;
   risk: typeof risk;
