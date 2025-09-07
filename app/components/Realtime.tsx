@@ -21,6 +21,9 @@ export default function Realtime() {
   // Local Realtime session state
   const [session, setSession] = useState<RealtimeSession | null>(null);
   const [connected, setConnected] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [showChat, setShowChat] = useState(false);
   const persistedIdsRef = useRef<Set<string>>(new Set());
 
   const agent = useMemo(() => {
@@ -31,11 +34,13 @@ export default function Realtime() {
       parameters: addTodoParams,
       needsApproval: false,
       execute: async ({ text }) => {
-        // Mirror user's spoken/intent into chat for context
-        await send({ content: text, role: "user", autoReply: false, createdTime: Date.now() });
+        // Log tool call for debugging visibility
+        await send({ content: `add_todo(text=${JSON.stringify(text)})`, role: "tool", autoReply: false, createdTime: Date.now() });
         // Create todo directly via Convex mutation
         await createTodo({ text });
-        return `Added todo: ${text}`;
+        const result = `Added todo: ${text}`;
+        await send({ content: result, role: "tool", autoReply: false, createdTime: Date.now() });
+        return result;
       },
     });
 
@@ -46,13 +51,16 @@ export default function Realtime() {
       parameters: emptyParams,
       needsApproval: false,
       execute: async () => {
+        await send({ content: `list_todos()`, role: "tool", autoReply: false, createdTime: Date.now() });
         const todos = await convex.query(api.todos.get, {} as any);
         if (!todos || todos.length === 0) return "No todos yet.";
         // Provide IDs so the agent can act on follow-up requests
         const lines = todos
           .map((t: any) => `- ${t._id}: ${t.text} ${t.isCompleted ? "[done]" : "[todo]"}`)
           .join("\n");
-        return `Current todos with IDs:\n${lines}`;
+        const result = `Current todos with IDs:\n${lines}`;
+        await send({ content: result, role: "tool", autoReply: false, createdTime: Date.now() });
+        return result;
       },
     });
 
@@ -63,9 +71,12 @@ export default function Realtime() {
       parameters: deleteParams,
       needsApproval: false,
       execute: async ({ id }) => {
+        await send({ content: `delete_todo(id=${id})`, role: "tool", autoReply: false, createdTime: Date.now() });
         // Id comes as string; Convex generated types allow string for runtime
         await removeTodo({ id: id as any });
-        return `Deleted todo ${id}`;
+        const result = `Deleted todo ${id}`;
+        await send({ content: result, role: "tool", autoReply: false, createdTime: Date.now() });
+        return result;
       },
     });
 
@@ -76,8 +87,11 @@ export default function Realtime() {
       parameters: updateParams,
       needsApproval: false,
       execute: async ({ id, text }) => {
+        await send({ content: `update_todo(id=${id}, text=${JSON.stringify(text)})`, role: "tool", autoReply: false, createdTime: Date.now() });
         await updateTodo({ id: id as any, text });
-        return `Updated todo ${id}`;
+        const result = `Updated todo ${id}`;
+        await send({ content: result, role: "tool", autoReply: false, createdTime: Date.now() });
+        return result;
       },
     });
 
@@ -88,8 +102,11 @@ export default function Realtime() {
       parameters: checkParams,
       needsApproval: false,
       execute: async ({ id, done }) => {
+        await send({ content: `check_todo(id=${id}, done=${done})`, role: "tool", autoReply: false, createdTime: Date.now() });
         await setCompleted({ id: id as any, isCompleted: done });
-        return `Updated completion for ${id}`;
+        const result = `Updated completion for ${id}`;
+        await send({ content: result, role: "tool", autoReply: false, createdTime: Date.now() });
+        return result;
       },
     });
 
@@ -100,13 +117,32 @@ export default function Realtime() {
       parameters: toggleParams,
       needsApproval: false,
       execute: async ({ id }) => {
+        await send({ content: `toggle_todo(id=${id})`, role: "tool", autoReply: false, createdTime: Date.now() });
         await toggleTodo({ id: id as any });
-        return `Toggled completion for ${id}`;
+        const result = `Toggled completion for ${id}`;
+        await send({ content: result, role: "tool", autoReply: false, createdTime: Date.now() });
+        return result;
       },
     });
     return new RealtimeAgent({
-      name: "Assistant",
-      instructions: "You can manage todos. Prefer calling list_todos first to retrieve IDs, then use delete_todo/update_todo/check_todo/toggle_todo with those IDs.",
+      name: "Meeting Action Items Tracker",
+      instructions:
+        [
+          "You are a silent background agent running during a live meeting.",
+          "Your job is to capture action items as todos and keep the list up to date.",
+          "NEVER speak back, greet, narrate, or produce user-facing text.",
+          "Work only by calling tools.",
+          "Behavior:",
+          "- First call list_todos to get current IDs and states.",
+          "- When you hear a new action item, add_todo with a concise, actionable text.",
+          "- If a mentioned action matches an existing todo, update_todo to refine wording.",
+          "- If an action is confirmed as done, check_todo(done=true). If reopened, check_todo(done=false).",
+          "- If a task is explicitly canceled, delete_todo.",
+          "- Prefer single-source-of-truth updates (IDs from list_todos).",
+          "- Avoid duplicates: compare semantically with existing todos first.",
+          "- Keep todos short, imperative, and self-contained (who/what/when if spoken).",
+          "- Do not ask for confirmation; act autonomously.",
+        ].join("\n"),
       tools: [addTodoTool, listTodosTool, deleteTodoTool, updateTodoTool, checkTodoTool, toggleTodoTool],
     });
   }, [send, convex, createTodo, removeTodo, toggleTodo, updateTodo, setCompleted]);
@@ -136,6 +172,7 @@ export default function Realtime() {
   async function connectRealtime() {
     if (connected || session) return;
     try {
+      setConnecting(true);
       const res = await fetch("/api/realtime-token");
       if (!res.ok) {
         const err = await res.text();
@@ -190,24 +227,59 @@ export default function Realtime() {
       setConnected(true);
     } catch (e) {
       console.error(e);
+    } finally {
+      setConnecting(false);
+    }
+  }
+
+  async function disconnectRealtime() {
+    if (!session || !connected) return;
+    try {
+      setDisconnecting(true);
+      session.close();
+      setSession(null);
+      setConnected(false);
+      persistedIdsRef.current.clear();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setDisconnecting(false);
     }
   }
 
   return (
-    <div className="min-h-[70vh] max-w-md mx-auto bg-white rounded-lg shadow-md p-4 flex flex-col">
+    <div className="max-w-md mx-auto bg-white rounded-lg shadow-md p-4 flex flex-col">
       <div className="mb-3 flex items-center justify-between">
         <div className="text-xl font-semibold text-gray-800 flex items-center gap-2">
           Realtime
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
         </div>
         <div className="flex items-center gap-2">
+          {!connected ? (
+            <button
+              title="Connect"
+              onClick={() => connectRealtime()}
+              className={`px-3 py-1 rounded-md text-white ${connecting ? "bg-blue-400 cursor-wait" : "bg-blue-600 hover:bg-blue-700"}`}
+              disabled={connecting}
+            >
+              {connecting ? "Connecting..." : "Connect"}
+            </button>
+          ) : (
+            <button
+              title="Disconnect"
+              onClick={() => disconnectRealtime()}
+              className={`px-3 py-1 rounded-md text-white ${disconnecting ? "bg-gray-400 cursor-wait" : "bg-gray-600 hover:bg-gray-700"}`}
+              disabled={disconnecting}
+            >
+              {disconnecting ? "Disconnecting..." : "Disconnect"}
+            </button>
+          )}
           <button
-            title={connected ? "Connected" : "Connect"}
-            onClick={() => connectRealtime()}
-            className={`px-3 py-1 rounded-md text-white ${connected ? "bg-gray-400 cursor-default" : "bg-green-600 hover:bg-green-700"}`}
-            disabled={connected}
+            title={showChat ? "Hide agent log" : "Show agent log"}
+            onClick={() => setShowChat((v) => !v)}
+            className="px-3 py-1 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
           >
-            {connected ? "Connected" : "Connect"}
+            {showChat ? "Hide Log" : "Show Log"}
           </button>
         <button
           title="Clear all"
@@ -221,46 +293,52 @@ export default function Realtime() {
         </button>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-        {messages === undefined ? (
-          <div className="text-gray-500">Loading...</div>
-        ) : messages.length === 0 ? (
-          <div className="text-gray-500">No messages yet. Start a realtime conversation!</div>
-        ) : (
-          messages.map((m) => (
-            <div key={m._id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[80%] flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}>
-                <div
-                  className={`rounded-2xl px-4 py-2 text-sm ${
-                    m.role === "user"
-                      ? "bg-green-500 text-white"
-                      : "bg-gray-100 text-gray-800"
-                  }`}
-                >
-                  {m.content}
+      {showChat && (
+        <>
+          <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+            {messages === undefined ? (
+              <div className="text-gray-500">Loading...</div>
+            ) : messages.length === 0 ? (
+              <div className="text-gray-500">No messages yet. Start a realtime conversation!</div>
+            ) : (
+              messages.map((m) => (
+                <div key={m._id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                  <div className={`max-w-[80%] flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}>
+                    <div
+                      className={`rounded-3xl px-4 py-2 text-sm ${
+                        {
+                          user: "bg-blue-500 text-white font-bold",
+                          system: "text-gray-800",
+                          tool: "text-gray-500"
+                        }[m.role]
+                      }`}
+                    >
+                      {m.content}
+                    </div>
+                    <div className="mt-1 text-[10px] leading-none text-gray-500">
+                      {new Date(m.createdTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </div>
+                  </div>
                 </div>
-                <div className="mt-1 text-[10px] leading-none text-gray-500">
-                  {new Date(m.createdTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                </div>
-              </div>
-            </div>
-          ))
-        )}
-        <div ref={endRef} />
-      </div>
-      <form ref={formRef} onSubmit={onSubmit} className="mt-3 flex gap-2">
-        <input
-          name="content"
-          placeholder="Type a realtime message"
-          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 text-black"
-        />
-        <button
-          type="submit"
-          className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500"
-        >
-          Send
-        </button>
-      </form>
+              ))
+            )}
+            <div ref={endRef} />
+          </div>
+          <form ref={formRef} onSubmit={onSubmit} className="mt-3 flex gap-2">
+            <input
+              name="content"
+              placeholder="Type a realtime message"
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+            />
+            <button
+              type="submit"
+              className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              Send
+            </button>
+          </form>
+        </>
+      )}
     </div>
   );
 }
